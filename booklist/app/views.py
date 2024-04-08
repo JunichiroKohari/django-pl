@@ -1,7 +1,12 @@
 import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.shortcuts import render
 from app.models import ReadHistory
+
+def index(request):
+    context = {}
+    return render(request, "app/index.html", context)
 
 @csrf_exempt
 def insert_log(request):

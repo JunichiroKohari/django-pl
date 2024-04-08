@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>読みログ</title>
+  </head>
+  <body>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <div id="app">
+      <h1>読みログ</h1>
+      <table>
+        <thead>
+          <tr>
+            <th>名前</th>
+            <th>書籍名</th>
+            <th>種類</th>
+            <th>価格</th>
+            <th>評価</th>
+            <th>日付</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- 入力行 -->
+          <tr>
+            <td>
+              <select v-model="form.name">
+                <option value="test1">test1</option>
+                <option value="test2">test2</option>
+              </select>
+            </td>
+            <td>
+              <input type="text" v-model="form.title">
+            </td>
+            <td>
+              <select v-model="form.category">
+                <option value="tech" label="技術書">tech</option>
+                <option value="business" label="ビジネス書">business</option>
+              </select>
+            </td>
+            <td>
+              <input type="number" v-model="form.price">
+            </td>
+            <td>
+              高<input type="radio" v-model="form.isFavorite" :value="true">
+              低<input type="radio" v-model="form.isFavorite" :value="false">
+              未<input type="radio" v-model="form.isFavorite" :value="null">
+            </td>
+            <td>
+              <input type="date" v-model="form.readAt">
+            </td>
+            <td>
+              公開<input type="radio" v-model="form.isPublic" :value="true">
+              非公開<input type="radio" v-model="form.isPublic" :value="false">
+              <button @click="submit">送信</button>
+            </td>
+          </tr>
+          <!-- 表示行 -->
+          <tr v-for="history in histories" :key="history.id">
+            <td>[[ history.name ]]</td>
+            <td>[[ history.title ]]</td>
+            <td v-if="history.category === 'tech'">技術書</td>
+            <td v-else-if="history.category === 'business'">ビジネス書</td>
+            <td>[[ history.price ]]円</td>
+            <td v-if="history.isFavorite === true">高</td>
+            <td v-else-if="history.isFavorite === false">低</td>
+            <td v-else-if="history.isFavorite === null">未</td>
+            <td>[[ history.readAt ]]</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <script>
+      const { createApp, onMounted, ref, reactive } = Vue
+
+      createApp({
+        setup() {
+          const histories = ref([])
+          const form = reactive({
+            name: 'altnight',
+            title: '',
+            category: 'tech',
+            price: 0,
+            isFavorite: null,
+            readAt: '2023-12-01',
+            isPublic: true,
+          })
+          const getHistories = async () => {
+            const res = await fetch('/api/read')
+            const json = await res.json()
+            histories.value = json.result
+          }
+          const submit = async () => {
+            await fetch('/api/insert', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(form),
+            })
+            await getHistories()
+          }
+
+          onMounted(async () => {
+            await getHistories()
+          })
+
+          return { histories, form, submit }
+        },
+        delimiters: ['[[', ']]']
+      }).mount('#app')
+    </script>
+    <style>
+      body {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+      }
+      table thead {
+          background-color: lightgray;
+      }
+    </style>
+  </body>
+</html>
