@@ -16,3 +16,17 @@ def insert_log(request):
         is_favorite=d["isFavorite"],
     )
     return JsonResponse({})
+
+@csrf_exempt
+def read_log(request):
+    qs = ReadHistory.objects.filter(is_public=True).order_by("-id")
+    d = [{
+        "id": obj.id,
+        "name": obj.name,
+        "category": obj.category,
+        "title": obj.title,
+        "price": obj.price,
+        "readAt": obj.read_at.strftime("%Y-%m-%d"),
+        "isFavorite": obj.is_favorite,
+    } for obj in qs]
+    return JsonResponse({"result": d})

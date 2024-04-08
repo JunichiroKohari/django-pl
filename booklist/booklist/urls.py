@@ -22,4 +22,5 @@ from app import views
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/insert", views.insert_log),
+    path("api/read", views.read_log),
 ]
