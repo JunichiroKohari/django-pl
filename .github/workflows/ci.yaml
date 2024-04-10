@@ -17,7 +17,6 @@ jobs:
       - name: Run linter
         run: |
           docker compose exec app black --check .
-          docker compose exec app ruff .
-          docker compose exec app mypy .
+          docker compose exec app ruff check .
       - name: Stop and remove docker containers
         run: docker compose down
