@@ -5,3 +5,6 @@ pytest-django
 pytest-freezer
 pytest-randomly
 factory-boy
+black
+ruff
+mypy
