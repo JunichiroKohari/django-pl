@@ -23,5 +23,8 @@ class ReadHistory(models.Model):
     is_public = models.BooleanField("公開するかどうか")
     is_favorite = models.BooleanField("評価", blank=True, null=True)
 
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         db_table = "read_history"
