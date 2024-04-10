@@ -4,7 +4,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import render
 from app.models import ReadHistory
 
-def index(request):
+def index(request): # pragma: no cover
     context = {}
     return render(request, "app/index.html", context)
 

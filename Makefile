@@ -31,3 +31,9 @@ migrate:
 
 createsuperuser:
 	docker compose exec app python3 manage.py createsuperuser
+
+test:
+	docker compose exec app pytest
+
+test-cov:
+	docker compose exec app pytest --cov .
