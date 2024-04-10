@@ -1,5 +1,6 @@
 from django.db import models
 
+
 class ReadHistory(models.Model):
     name = models.CharField(
         "名前",

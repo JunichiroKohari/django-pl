@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+
 @pytest.mark.django_db
 class TestReadLog:
     """read_log APIをテストする"""
@@ -65,9 +66,7 @@ class TestReadLog:
 
         # assert
         assert res.status_code == 200
-        assert [row["id"] for row in res.json()["result"]] == [
-            105, 104, 103, 102, 101
-        ]
+        assert [row["id"] for row in res.json()["result"]] == [105, 104, 103, 102, 101]
 
     def test_ids_filtered_non_public_rows(self, target_path, client):
         """公開フラグがONであるデータ以外はレスポンスから除外されていること。"""
@@ -109,7 +108,7 @@ class TestInsertLog:
                     "isPublic": True,
                     "isFavorite": True,
                 },
-                date(2024, 4, 10)
+                date(2024, 4, 10),
             ),
             (
                 {
@@ -121,9 +120,9 @@ class TestInsertLog:
                     "isPublic": False,
                     "isFavorite": False,
                 },
-                date(2024, 4, 11)
+                date(2024, 4, 11),
             ),
-        ]
+        ],
     )
     @pytest.mark.freeze_time("2024-04-10 09:00:00+9:00")
     def test_it(self, target_path, client, input_data, expected_read_at):

@@ -3,6 +3,7 @@ from datetime import date
 import factory
 import factory.fuzzy
 
+
 class ReadHistoryFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = "app.ReadHistory"

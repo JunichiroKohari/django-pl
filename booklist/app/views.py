@@ -4,9 +4,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import render
 from app.models import ReadHistory
 
-def index(request): # pragma: no cover
+
+def index(request):  # pragma: no cover
     context = {}
     return render(request, "app/index.html", context)
+
 
 @csrf_exempt
 def insert_log(request):
@@ -22,16 +24,20 @@ def insert_log(request):
     )
     return JsonResponse({})
 
+
 @csrf_exempt
 def read_log(request):
     qs = ReadHistory.objects.filter(is_public=True).order_by("-id")
-    d = [{
-        "id": obj.id,
-        "name": obj.name,
-        "category": obj.category,
-        "title": obj.title,
-        "price": obj.price,
-        "readAt": obj.read_at.strftime("%Y-%m-%d"),
-        "isFavorite": obj.is_favorite,
-    } for obj in qs]
+    d = [
+        {
+            "id": obj.id,
+            "name": obj.name,
+            "category": obj.category,
+            "title": obj.title,
+            "price": obj.price,
+            "readAt": obj.read_at.strftime("%Y-%m-%d"),
+            "isFavorite": obj.is_favorite,
+        }
+        for obj in qs
+    ]
     return JsonResponse({"result": d})
