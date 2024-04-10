@@ -1,0 +1,15 @@
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "booklist.settings"
+
+[tool.coverage.run]
+omit = [
+    "booklist/asgi.py",
+    "booklist/wsgi.py",
+    "manage.py",
+    "**/migrations/*",
+    "**/tests.py",
+    "**/tests/*",
+]
+
+[tool.coverage.report]
+show_missing = true
