@@ -1,0 +1,2 @@
+recursive-include booklist *.html
+include LICENSE
