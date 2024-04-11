@@ -1,7 +1,7 @@
 # booklist
 
 ## purpose
-just a test of django
+Just a test of django
 
 ## versions
 :Python: 3.11
@@ -22,8 +22,8 @@ $ open http://localhost:8000/
 
 ### install to develop
 
-1. check out
-2. install modules with the following steps
+1. Check out
+2. Install modules with the following steps
 
 ```bash
 $ cd booklist
@@ -31,3 +31,16 @@ $ python3.11 -m venv venv
 $ source venv/bin/activate
 (venv) $ pip install -e .
 ```
+
+### when change dependencies
+1. Update `dependencies` of `pyproject.toml`
+2. Update environment with the following steps ::
+
+```bash
+(venv) $ deactivate
+$ python3 -m venv --clear venv
+$ source venv/bin/activate
+(venv) $ pip install -e ./booklist
+```
+
+3. commit pyproject.toml
