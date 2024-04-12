@@ -1,0 +1,116 @@
+name: Deploy to Amazon ECS
+
+# ワークフローを手動で起動する
+on: workflow_dispatch
+
+env:
+  AWS_REGION: ap-northeast-1
+  ECR_REPOSITORY_APP: booklist-app
+  ECR_REPOSITORY_NGINX: booklist-nginx
+  ECS_SERVICE: booklist-service
+  ECS_CLUSTER: booklist-cluster
+  CONTAINER_NAME_APP: app
+  CONTAINER_NAME_NGINX: nginx
+  DB_MIGRATE_TASK_NAME: booklist-db-migrate
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+    # ソースコードのチェックアウト
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    # 短縮版のコミットSHAを取得
+    - name: Set SHA short
+      id: sha
+      run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+    # AWSの資格情報の設定
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        # アクセスキーIDとシークレットアクセスキーを
+        # GitHubリポジトリの「Secrets」から取得
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    # ECRへログイン
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    # Dockerイメージ（読みログアプリ）のビルド、タグづけ、ECRへpush
+    - name: Build, tag, and push image to Amazon ECR (App)
+      id: build-image-app
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ steps.sha.outputs.short }}
+      # Dockerイメージをビルド、タグづけしてECRへpush
+      # マイグレーション用のタスク定義は latest タグを使用するため、latestタグも設定している
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_APP:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY_APP:latest .
+        docker push -a $ECR_REGISTRY/$ECR_REPOSITORY_APP
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY_APP:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    # Dockerイメージ（nginx）のビルド、タグづけ、ECRへpush
+    - name: Build, tag, and push image to Amazon ECR (Nginx)
+      id: build-image-nginx
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ steps.sha.outputs.short }}
+      working-directory: nginx
+      # Dockerイメージをビルド、タグづけしてECRへpush
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_NGINX:$IMAGE_TAG .
+        docker push -a $ECR_REGISTRY/$ECR_REPOSITORY_NGINX
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY_NGINX:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    # 読みログアプリのイメージをタスク定義にレンダリング
+    - name: Fill in the new image ID in the Amazon ECS task definition (App)
+      id: render-app-container
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: aws/booklist-ecs-task-def.json
+        container-name: ${{ env.CONTAINER_NAME_APP }}
+        image: ${{ steps.build-image-app.outputs.image }}
+
+    # nginxのイメージをタスク定義にレンダリング
+    - name: Fill in the new image ID in the Amazon ECS task definition (Nginx)
+      id: render-nginx-container
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: ${{ steps.render-app-container.outputs.task-definition }}
+        container-name: ${{ env.CONTAINER_NAME_NGINX }}
+        image: ${{ steps.build-image-nginx.outputs.image }}
+
+    # DBマイグレーションのタスクを実行
+    - name: DB migrate
+      id: db-migrate-task
+      uses: geekcell/github-action-aws-ecs-run-task@v1.0.0
+      with:
+        cluster: ${{ env.ECS_CLUSTER }}
+        task-definition: ${{ env.DB_MIGRATE_TASK_NAME }}
+        # サブネットIDをGitHubリポジトリの「Variables」から取得
+        subnet-ids: |
+          ${{ vars.booklist_APP_SUBNET_1A_ID }}
+          ${{ vars.booklist_APP_SUBNET_1C_ID }}
+        # セキュリティグループIDををGitHubリポジトリの「Variables」から取得
+        security-group-ids: |
+          ${{ vars.booklist_APP_SG_ID }}
+
+    # タスク定義をECSに登録し、ECSサービスにデプロイ
+    - name: Deploy Amazon ECS task definition
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.render-nginx-container.outputs.task-definition }}
+        service: ${{ env.ECS_SERVICE }}
+        cluster: ${{ env.ECS_CLUSTER }}
+        wait-for-service-stability: true
