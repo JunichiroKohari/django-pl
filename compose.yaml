@@ -1,20 +1,37 @@
+version: "3.9"
+
 services:
   app:
     build:
       dockerfile: ./Dockerfile
-    volumes:
-      - ./:/src
+    environment:
+      DEBUG: "on"
+      SECRET_KEY: "django-insecure-^=+!_al!e(6ki&ifv#4i#-dga0k=sfptv_xf+hs%u^(5qv!a1p"
+      DATABASE_URL: "psql://postgres:example@db:5432/booklist"
     ports:
       - "8000:8000"
-    stdin_open: true # docker run -i
-    tty: true        # docker run -t
-
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./:/src
+    depends_on:
+      db:
+        condition: service_healthy
   db:
-    image: postgres
+    image: postgres:15
+    environment:
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "example"
+      POSTGRES_DB: "booklist"
     restart: always
     ports:
       - "5432:5432"
-    environment:
-      POSTGRES_PASSWORD: example
-      POSTGRES_USER: postgres
-      POSTGRES_DB: booklist
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d booklist"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  db-data:
