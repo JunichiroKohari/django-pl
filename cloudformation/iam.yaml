@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: yomilog IAM resource template
+
+Resources:
+  # ========================================
+  # IAM
+  # ========================================
+
+  # Github ActionsでAWSにアクセスするためのIAMユーザー
+  GithubActionsUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: github_actions
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser
+        - arn:aws:iam::aws:policy/AmazonECS_FullAccess
+
+  # ECSでタスクを実行するためのIAMロール
+  EcsTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: booklist_ecs_task_execution
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        # パラメータストアにアクセスするためのポリシー
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+
+Outputs:
+  EcsTaskExecutionRoleArn:
+    Description: EcsTaskExecutionRole Arn
+    Value: !GetAtt EcsTaskExecutionRole.Arn
+    # yomilog-serviceスタックから参照するためにIAMロールのARNをエクスポート
+    Export:
+      Name: !Sub ${AWS::StackName}-EcsTaskExecutionRoleArn

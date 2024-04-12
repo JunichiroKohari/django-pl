@@ -1,0 +1,606 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: booklist resource template
+
+Parameters:
+  IamStackName:
+    Description: Stack Name for IAM
+    Type: String
+    Default: booklist-iam
+  DBUsername:
+    NoEcho: 'true'
+    Description: Username for Aurora PostgreSQL database access
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+  DBPassword:
+    NoEcho: 'true'
+    Description: Password for Aurora PostgreSQL database access
+    Type: String
+    MinLength: '8'
+    MaxLength: '41'
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: must contain only alphanumeric characters.
+  DBName:
+    NoEcho: 'true'
+    Description: Database Name
+    Type: String
+  AppContainerName:
+    Description: App Container Name
+    Type: String
+    Default: app
+  NginxContainerName:
+    Description: Nginx Container Name
+    Type: String
+    Default: nginx
+
+Resources:
+  # ========================================
+  # Network, Security
+  # ========================================
+
+  # ----------------------------------------
+  # VPC
+  # ----------------------------------------
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      # EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: booklist-vpc
+
+  # ----------------------------------------
+  # Internet Gateway
+  # ----------------------------------------
+  Igw:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: booklist-igw
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref Igw
+
+  # ----------------------------------------
+  # Subnet, RouteTable (For Public)
+  # ----------------------------------------
+  PublicSubnet1A:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.0.0/24
+      VpcId: !Ref Vpc
+      AvailabilityZone: ap-northeast-1a
+      Tags:
+        - Key: Name
+          Value: booklist-public-subnet-1a
+        - Key: Type
+          Value: Public
+
+  PublicSubnet1C:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.1.0/24
+      VpcId: !Ref Vpc
+      AvailabilityZone: ap-northeast-1c
+      Tags:
+        - Key: Name
+          Value: booklist-public-subnet-1c
+        - Key: Type
+          Value: Public
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: booklist-public-rtb
+    DependsOn: AttachGateway
+
+  PublicRouteDefault:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref Igw
+
+  PublicRouteTableAssociation1A:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1A
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicRouteTableAssociation1C:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1C
+      RouteTableId: !Ref PublicRouteTable
+
+  # ----------------------------------------
+  # NAT Gateway
+  # ----------------------------------------
+  NatGateway1A:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId: !Ref PublicSubnet1A
+      AllocationId: !GetAtt EIPForNATGateway1A.AllocationId
+      Tags:
+        - Key: Name
+          Value: booklist-nat-1a
+
+  EIPForNATGateway1A:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: booklist-nat-1a
+
+  NatGateway1C:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId: !Ref PublicSubnet1C
+      AllocationId: !GetAtt EIPForNATGateway1C.AllocationId
+      Tags:
+        - Key: Name
+          Value: booklist-nat-1c
+
+  EIPForNATGateway1C:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: booklist-nat-1c
+
+  # ----------------------------------------
+  # Subnet, RouteTable (For Application)
+  # ----------------------------------------
+  PrivateSubnetApp1A:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.8.0/24
+      VpcId: !Ref Vpc
+      AvailabilityZone: ap-northeast-1a
+      Tags:
+        - Key: Name
+          Value: booklist-private-subnet-app-1a
+        - Key: Type
+          Value: Private
+
+  PrivateSubnetApp1C:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.9.0/24
+      VpcId: !Ref Vpc
+      AvailabilityZone: ap-northeast-1c
+      Tags:
+        - Key: Name
+          Value: booklist-private-subnet-app-1c
+        - Key: Type
+          Value: Private
+
+  AppRouteTable1A:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: booklist-app-rtb-1a
+
+  AppRouteEgress1A:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AppRouteTable1A
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1A
+
+  AppRouteTable1C:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: booklist-app-rtb-1c
+
+  AppRouteEgress1C:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AppRouteTable1C
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1C
+
+  AppRouteTableAssociation1A:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetApp1A
+      RouteTableId: !Ref AppRouteTable1A
+
+  AppRouteTableAssociation1C:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetApp1C
+      RouteTableId: !Ref AppRouteTable1C
+
+  # ----------------------------------------
+  # Subnet, RouteTable (For DB)
+  # ----------------------------------------
+  PrivateSubnetDB1A:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.16.0/24
+      VpcId: !Ref Vpc
+      AvailabilityZone: ap-northeast-1a
+      Tags:
+        - Key: Name
+          Value: booklist-private-subnet-db-1a
+        - Key: Type
+          Value: Private
+
+  PrivateSubnetDB1C:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.17.0/24
+      VpcId: !Ref Vpc
+      AvailabilityZone: ap-northeast-1c
+      Tags:
+        - Key: Name
+          Value: booklist-private-subnet-db-1c
+        - Key: Type
+          Value: Private
+
+  DBRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: booklist-db-rtb
+
+  DBRouteTableAssociation1A:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetDB1A
+      RouteTableId: !Ref DBRouteTable
+
+  DBRouteTableAssociation1C:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetDB1C
+      RouteTableId: !Ref DBRouteTable
+
+  # ----------------------------------------
+  # SecurityGroup (For ALB)
+  # ----------------------------------------
+  ALBSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: booklist-alb
+      GroupDescription: Security group for ALB
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: booklist-alb-sg
+
+  # ----------------------------------------
+  # SecurityGroup (For App)
+  # ----------------------------------------
+  AppSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: booklist-app
+      GroupDescription: Security group for app
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: booklist-app-sg
+
+  # InboundRule: LB -> App
+  AppFromALBSgIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !GetAtt ALBSg.GroupId
+      GroupId: !GetAtt AppSg.GroupId
+
+  # ----------------------------------------
+  # SecurityGroup (For DB)
+  # ----------------------------------------
+  DBSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: booklist-db
+      GroupDescription: Security group for db
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: booklist-db-sg
+
+  # InboundRule: App -> DB
+  DBFromAppSgIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !GetAtt AppSg.GroupId
+      GroupId: !GetAtt DBSg.GroupId
+
+  # ========================================
+  # Database
+  # ========================================
+  RDSCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBClusterIdentifier: booklist-db-cluster
+      DatabaseName: !Ref DBName
+      Engine: aurora-postgresql
+      EngineVersion: '15.3'
+      DBClusterParameterGroupName: !Ref RDSDBClusterParameterGroup
+      VpcSecurityGroupIds:
+        - !Ref DBSg
+
+  RDSDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBParameterGroupName: !Ref RDSDBParameterGroup
+      DBInstanceIdentifier: booklist-db-1
+      Engine: aurora-postgresql
+      DBClusterIdentifier: !Ref RDSCluster
+      DBInstanceClass: db.t3.medium
+
+  # DB parameter group
+  RDSDBClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      DBClusterParameterGroupName: booklist-db-cluster-param-group
+      Description: booklist Aurora Cluster Parameter Group
+      Family: aurora-postgresql15
+      Parameters:
+        client_encoding: UTF8
+
+  RDSDBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      DBParameterGroupName: booklist-db-param-group
+      Description: booklist Aurora Parameter Group
+      Family: aurora-postgresql15
+      Parameters:
+        shared_buffers: 'SUM({DBInstanceClassMemory/12038},-50003)'
+
+  # DB subnet group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: booklist DB Subnet Group
+      DBSubnetGroupName: booklist-db-subnet-group
+      SubnetIds:
+        - !Ref PrivateSubnetDB1A
+        - !Ref PrivateSubnetDB1C
+
+  # ========================================
+  # Application
+  # ========================================
+
+  # ----------------------------------------
+  #  CloudWatch Log Group
+  # ----------------------------------------
+  ServiceLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: booklist-service
+      RetentionInDays: 14
+
+  TaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: booklist-task
+      RetentionInDays: 14
+
+  # ----------------------------------------
+  # ECR
+  # ----------------------------------------
+  AppRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: booklist-app
+      EmptyOnDelete: true
+
+  NginxRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: booklist-nginx
+      EmptyOnDelete: true
+
+  # ----------------------------------------
+  # Task Definition
+  # ----------------------------------------
+
+  # DBマイグレーション用タスク定義
+  DBMigrateTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: booklist-db-migrate
+      Cpu: "256"
+      Memory: "512"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      RuntimePlatform:
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Essential: true
+          Image: !GetAtt AppRepository.RepositoryUri
+          Name: !Ref AppContainerName
+          Command:
+            - python
+            - manage.py
+            - migrate
+          Secrets:
+            - Name: SECRET_KEY
+              ValueFrom: booklist-secret-key
+            - Name: DATABASE_URL
+              ValueFrom: booklist-database-url
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref TaskLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: db-migrate
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub ${IamStackName}-EcsTaskExecutionRoleArn
+
+  # Webアプリ用タスク定義
+  WebAppTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: booklist-web-app
+      Cpu: "256"
+      Memory: "512"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      RuntimePlatform:
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Essential: true
+          Image: !GetAtt NginxRepository.RepositoryUri
+          Name: !Ref NginxContainerName
+          PortMappings:
+            - ContainerPort: 80
+              HostPort: 80
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ServiceLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: web
+        - Essential: true
+          Image: !GetAtt AppRepository.RepositoryUri
+          Name: !Ref AppContainerName
+          Command:
+            - gunicorn
+          Environment:
+            - Name: ALLOWED_HOSTS
+              Value: !GetAtt ALB.DNSName
+          Secrets:
+            - Name: SECRET_KEY
+              ValueFrom: booklist-secret-key
+            - Name: DATABASE_URL
+              ValueFrom: booklist-database-url
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ServiceLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: web
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub ${IamStackName}-EcsTaskExecutionRoleArn
+
+  # ----------------------------------------
+  # ECS Cluster
+  # ----------------------------------------
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: booklist-cluster
+
+  # ----------------------------------------
+  # ECS Service
+  # ----------------------------------------
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: ALBListener
+    Properties:
+      Cluster: !Ref ECSCluster
+      # 必要なタスク数: 最初はECRにイメージがないため「0」としている
+      DesiredCount: 0
+      LaunchType: FARGATE
+      LoadBalancers:
+        - TargetGroupArn: !Ref AppTargetGroup
+          ContainerPort: 80
+          ContainerName: !Ref NginxContainerName
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !Ref AppSg
+          Subnets:
+            - !Ref PrivateSubnetApp1A
+            - !Ref PrivateSubnetApp1C
+      ServiceName: booklist-service
+      TaskDefinition: !Ref WebAppTaskDefinition
+
+  # ----------------------------------------
+  #  ALB
+  # ----------------------------------------
+  ALB:
+    Type : AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: booklist-alb
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSg
+      Subnets:
+        - !Ref PublicSubnet1A
+        - !Ref PublicSubnet1C
+
+  # ----------------------------------------
+  #  Target Group
+  # ----------------------------------------
+  AppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: booklist-target-group
+      Port: 80
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /healthcheck
+      VpcId: !Ref Vpc
+
+  # ----------------------------------------
+  #  ALB Listner
+  # ----------------------------------------
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref AppTargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+
+Outputs:
+  DBClusterEndpoint:
+    Description: DB Cluster Endpoint
+    Value: !GetAtt RDSCluster.Endpoint.Address
+  PrivateSubnetApp1AID:
+    Description: Private Subnet ID
+    Value: !Ref PrivateSubnetApp1A
+  PrivateSubnetApp1CID:
+    Description: Private Subnet ID
+    Value: !Ref PrivateSubnetApp1C
+  AppSgID:
+    Description: SecurityGroup ID
+    Value: !GetAtt AppSg.GroupId
+  ALBDNSName:
+    Description: ALB DNS name
+    Value: !GetAtt ALB.DNSName
