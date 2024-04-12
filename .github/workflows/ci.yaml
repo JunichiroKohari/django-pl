@@ -11,7 +11,7 @@ jobs:
       - name: Create and start docker containers
         run: docker compose up -d
       - name: Install libraries for development
-        run: docker compose exec app pip install -r ./requirements-dev.txt
+        run: docker compose exec app pip install -r ../requirements-dev.txt
       - name: Run test
         run: docker compose exec app pytest
       - name: Run linter
