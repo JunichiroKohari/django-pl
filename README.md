@@ -41,6 +41,7 @@ $ source venv/bin/activate
 $ python3 -m venv --clear venv
 $ source venv/bin/activate
 (venv) $ pip install -e ./booklist
+(venv) $ pip freeze --exclude-editable > requirements.txt
 ```
 
-3. commit pyproject.toml
+3. commit pyproject.toml and requirements.txt
