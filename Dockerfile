@@ -1,6 +1,6 @@
 FROM library/python:3.11
 
-COPY ./requirements.txt /tmp/
+COPY ./requirements.txt ./requirements-dev.txt /tmp/
 WORKDIR /tmp
 RUN pip install -r requirements.txt
 
