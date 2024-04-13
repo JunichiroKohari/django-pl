@@ -41,3 +41,14 @@ def read_log(request):
         for obj in qs
     ]
     return JsonResponse({"result": d})
+
+def health(request):
+    from django.db import connection as sql_connection
+
+    try:
+        with sql_connection.cursor() as cursor:
+            cursor.execute("SELECT 1 FROM read_history")
+            cursor.fetchone()
+        return JsonResponse({"status": 200}, status=200)
+    except Exception as e:
+        return JsonResponse({"status": 503, "error": e}, status=503)
